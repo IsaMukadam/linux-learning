@@ -32,12 +32,19 @@ Then update GRUB:
 sudo update-grub
 ```
 
+> You can skip this for EC2, as AWS already secures boot access.
+# If you're hardening a local install of Amazon Linux, it's possible—but very rare and not necessary for EC2.
+
 ### Disable Unused Filesystems:
 Edit `/etc/modprobe.d/CIS.conf`:
 ```bash
 install cramfs /bin/true
 install squashfs /bin/true
 install udf /bin/true
+
+# Regenerate the initramfs (important for the change to apply at boot):
+
+sudo dracut -f
 ```
 
 ### Secure Boot Parameters:
@@ -99,33 +106,41 @@ sudo yum remove telnet rsh-server xinetd -y  # RHEL
 ### Password Policy:
 Edit `/etc/login.defs` and `/etc/pam.d/common-password` (Ubuntu):
 ```bash
-PASS_MAX_DAYS 90
-PASS_MIN_DAYS 7
-PASS_WARN_AGE 7
+PASS_MAX_DAYS 90   # Password expires after 90 days
+PASS_MIN_DAYS 7    # Minimum 7 days before a user can change their password again
+PASS_WARN_AGE 7    # Show a warning 7 days before the password expires
 ```
 
 Use `pam_pwquality`:
 ```bash
 sudo apt install libpam-pwquality  # Ubuntu
-sudo yum install libpwquality  # RHEL
+sudo yum install libpwquality  # RHEL/AL2023
+
+# You configure PAM (Pluggable Authentication Modules) to use pam_pwquality.so.
+# On Amazon Linux 2023 (or RHEL 9-like systems), it’s usually in:
+sudo nano /etc/pam.d/system-auth
+
+# You’ll see a line like:
+password requisite pam_pwquality.so retry=3
 ```
 
+# Then configure:
 Edit `/etc/security/pwquality.conf`:
 ```bash
-minlen = 14
-dcredit = -1
-ucredit = -1
-ocredit = -1
-lcredit = -1
+minlen = 14      # Minimum length: 14 characters
+dcredit = -1     # Must have at least 1 digit (0-9)
+ucredit = -1     # Must have at least 1 uppercase letter
+ocredit = -1     # Must have at least 1 special character
+lcredit = -1     # Must have at least 1 lowercase letter
 ```
 
 ### SSH Hardening:
 Edit `/etc/ssh/sshd_config`:
 ```bash
-PermitRootLogin no
-PasswordAuthentication no
-PermitEmptyPasswords no
-AllowUsers youruser
+PermitRootLogin no # Forces users to log in as a regular user (e.g., ec2-user, admin) and then use sudo if needed
+PasswordAuthentication no # Forces key-based authentication (more secure than using passwords).
+PermitEmptyPasswords no # Prevents login for accounts that have no password set.
+AllowUsers youruser 
 ```
 Then restart SSH:
 ```bash
